@@ -178,12 +178,11 @@ public:
     Mask = AMDGPU::DepCtr::encodeFieldVaVdst(
         Mask, std::min(AMDGPU::DepCtr::decodeFieldVaVdst(Mask1),
                        AMDGPU::DepCtr::decodeFieldVaVdst(Mask2)));
-    const AMDGPU::IsaVersion &Version = AMDGPU::getIsaVersion(ST->getCPU());
     Mask = AMDGPU::DepCtr::encodeFieldHoldCnt(
         Mask,
-        std::min(AMDGPU::DepCtr::decodeFieldHoldCnt(Mask1, Version),
-                 AMDGPU::DepCtr::decodeFieldHoldCnt(Mask2, Version)),
-        Version);
+        std::min(AMDGPU::DepCtr::decodeFieldHoldCnt(Mask1, *ST),
+                 AMDGPU::DepCtr::decodeFieldHoldCnt(Mask2, *ST)),
+        *ST);
     Mask = AMDGPU::DepCtr::encodeFieldVaSsrc(
         Mask, std::min(AMDGPU::DepCtr::decodeFieldVaSsrc(Mask1),
                        AMDGPU::DepCtr::decodeFieldVaSsrc(Mask2)));

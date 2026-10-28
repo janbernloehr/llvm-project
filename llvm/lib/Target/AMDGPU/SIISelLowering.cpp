@@ -13142,8 +13142,7 @@ SDValue SITargetLowering::LowerINTRINSIC_VOID(SDValue Op,
                                 DAG.getConstant(0x3F, DL, MVT::i32));
     // Member count should be put into M0[ShAmt:+CntMask width]
     // Barrier ID should be put into M0[5:0]
-    unsigned CntMask = AMDGPU::getBarrierMemberCountBitMask(
-        AMDGPU::getIsaVersion(Subtarget->getCPU()));
+    unsigned CntMask = AMDGPU::getBarrierMemberCountBitMask(*Subtarget);
     SDValue MemberCnt = DAG.getNode(ISD::AND, DL, MVT::i32, CntOp,
                                     DAG.getConstant(CntMask, DL, MVT::i32));
     constexpr unsigned ShAmt = 16;

@@ -66,22 +66,22 @@ StringLiteral getInstCounterName(InstCounterType T) {
   llvm_unreachable("Unhandled InstCounterType");
 }
 
-HardwareLimits::HardwareLimits(const IsaVersion &IV) {
-  bool HasExtendedWaitCounts = IV.Major >= 12;
+HardwareLimits::HardwareLimits(const MCSubtargetInfo &STI) {
+  bool HasExtendedWaitCounts = isGFX12Plus(STI);
   if (HasExtendedWaitCounts) {
-    LoadcntMax = getLoadcntBitMask(IV);
-    DscntMax = getDscntBitMask(IV);
+    LoadcntMax = getLoadcntBitMask(STI);
+    DscntMax = getDscntBitMask(STI);
   } else {
-    LoadcntMax = getVmcntBitMask(IV);
-    DscntMax = getLgkmcntBitMask(IV);
+    LoadcntMax = getVmcntBitMask(STI);
+    DscntMax = getLgkmcntBitMask(STI);
   }
-  ExpcntMax = getExpcntBitMask(IV);
-  StorecntMax = getStorecntBitMask(IV);
-  SamplecntMax = getSamplecntBitMask(IV);
-  BvhcntMax = getBvhcntBitMask(IV);
-  KmcntMax = getKmcntBitMask(IV);
-  XcntMax = getXcntBitMask(IV);
-  AsyncMax = getAsynccntBitMask(IV);
+  ExpcntMax = getExpcntBitMask(STI);
+  StorecntMax = getStorecntBitMask(STI);
+  SamplecntMax = getSamplecntBitMask(STI);
+  BvhcntMax = getBvhcntBitMask(STI);
+  KmcntMax = getKmcntBitMask(STI);
+  XcntMax = getXcntBitMask(STI);
+  AsyncMax = getAsynccntBitMask(STI);
   VaVdstMax = DepCtr::getVaVdstBitMask();
   VmVsrcMax = DepCtr::getVmVsrcBitMask();
 }
@@ -118,42 +118,42 @@ unsigned HardwareLimits::get(InstCounterType T) const {
 void Waitcnt::dump() const { dbgs() << *this << '\n'; }
 #endif
 
-Waitcnt decodeWaitcnt(const IsaVersion &Version, unsigned Encoded) {
+Waitcnt decodeWaitcnt(const MCSubtargetInfo &STI, unsigned Encoded) {
   Waitcnt Decoded;
-  Decoded.set(LOAD_CNT, decodeVmcnt(Version, Encoded));
-  Decoded.set(EXP_CNT, decodeExpcnt(Version, Encoded));
-  Decoded.set(DS_CNT, decodeLgkmcnt(Version, Encoded));
+  Decoded.set(LOAD_CNT, decodeVmcnt(STI, Encoded));
+  Decoded.set(EXP_CNT, decodeExpcnt(STI, Encoded));
+  Decoded.set(DS_CNT, decodeLgkmcnt(STI, Encoded));
   return Decoded;
 }
 
-unsigned encodeWaitcnt(const IsaVersion &Version, const Waitcnt &Decoded) {
-  return encodeWaitcnt(Version, Decoded.get(LOAD_CNT), Decoded.get(EXP_CNT),
+unsigned encodeWaitcnt(const MCSubtargetInfo &STI, const Waitcnt &Decoded) {
+  return encodeWaitcnt(STI, Decoded.get(LOAD_CNT), Decoded.get(EXP_CNT),
                        Decoded.get(DS_CNT));
 }
 
-Waitcnt decodeLoadcntDscnt(const IsaVersion &Version, unsigned LoadcntDscnt) {
+Waitcnt decodeLoadcntDscnt(const MCSubtargetInfo &STI, unsigned LoadcntDscnt) {
   Waitcnt Decoded;
-  Decoded.set(LOAD_CNT, decodeLoadcnt(Version, LoadcntDscnt));
-  Decoded.set(DS_CNT, decodeDscnt(Version, LoadcntDscnt));
+  Decoded.set(LOAD_CNT, decodeLoadcnt(STI, LoadcntDscnt));
+  Decoded.set(DS_CNT, decodeDscnt(STI, LoadcntDscnt));
   return Decoded;
 }
 
-Waitcnt decodeStorecntDscnt(const IsaVersion &Version, unsigned StorecntDscnt) {
+Waitcnt decodeStorecntDscnt(const MCSubtargetInfo &STI,
+                            unsigned StorecntDscnt) {
   Waitcnt Decoded;
-  Decoded.set(STORE_CNT, decodeStorecnt(Version, StorecntDscnt));
-  Decoded.set(DS_CNT, decodeDscnt(Version, StorecntDscnt));
+  Decoded.set(STORE_CNT, decodeStorecnt(STI, StorecntDscnt));
+  Decoded.set(DS_CNT, decodeDscnt(STI, StorecntDscnt));
   return Decoded;
 }
 
-unsigned encodeLoadcntDscnt(const IsaVersion &Version, const Waitcnt &Decoded) {
-  return encodeLoadcntDscnt(Version, Decoded.get(LOAD_CNT),
-                            Decoded.get(DS_CNT));
+unsigned encodeLoadcntDscnt(const MCSubtargetInfo &STI,
+                            const Waitcnt &Decoded) {
+  return encodeLoadcntDscnt(STI, Decoded.get(LOAD_CNT), Decoded.get(DS_CNT));
 }
 
-unsigned encodeStorecntDscnt(const IsaVersion &Version,
+unsigned encodeStorecntDscnt(const MCSubtargetInfo &STI,
                              const Waitcnt &Decoded) {
-  return encodeStorecntDscnt(Version, Decoded.get(STORE_CNT),
-                             Decoded.get(DS_CNT));
+  return encodeStorecntDscnt(STI, Decoded.get(STORE_CNT), Decoded.get(DS_CNT));
 }
 
 std::optional<AMDGPU::InstCounterType> counterTypeForInstr(unsigned Opcode) {

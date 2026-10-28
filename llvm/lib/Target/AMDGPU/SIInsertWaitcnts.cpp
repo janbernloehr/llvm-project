@@ -151,7 +151,6 @@ class WaitcntGenerator {
 protected:
   const GCNSubtarget &ST;
   const SIInstrInfo &TII;
-  AMDGPU::IsaVersion IV;
   AMDGPU::InstCounterType MaxCounter;
   bool OptNone;
   bool ExpandWaitcntProfiling = false;
@@ -168,7 +167,7 @@ public:
                    AMDGPU::InstCounterType MaxCounter,
                    const AMDGPU::HardwareLimits &Limits)
       : ST(MF.getSubtarget<GCNSubtarget>()), TII(*ST.getInstrInfo()),
-        IV(AMDGPU::getIsaVersion(ST.getCPU())), MaxCounter(MaxCounter),
+        MaxCounter(MaxCounter),
         OptNone(MF.getFunction().hasOptNone() ||
                 MF.getTarget().getOptLevel() == CodeGenOptLevel::None),
         ExpandWaitcntProfiling(
@@ -1680,7 +1679,7 @@ bool WaitcntGeneratorPreGFX12::applyPreexistingWaitcnt(
     // by an earlier pass), it may be entirely removed.
     if (Opcode == AMDGPU::S_WAITCNT) {
       unsigned IEnc = static_cast<unsigned>(II.getOperand(0).getImm());
-      AMDGPU::Waitcnt OldWait = AMDGPU::decodeWaitcnt(IV, IEnc);
+      AMDGPU::Waitcnt OldWait = AMDGPU::decodeWaitcnt(ST, IEnc);
       if (TrySimplify) {
         ScoreBrackets.simplifyWaitcnt(OldWait);
         ScoreBrackets.simplifyVmemInvOnlyWait(OldWait);
@@ -1748,7 +1747,7 @@ bool WaitcntGeneratorPreGFX12::applyPreexistingWaitcnt(
 
   if (WaitcntInstr) {
     Modified |= updateOperandIfDifferent(*WaitcntInstr, AMDGPU::OpName::simm16,
-                                         AMDGPU::encodeWaitcnt(IV, Wait));
+                                         AMDGPU::encodeWaitcnt(ST, Wait));
     Modified |= promoteSoftWaitCnt(WaitcntInstr);
 
     ScoreBrackets.applyWaitcnt(Wait, AMDGPU::LOAD_CNT);
@@ -1816,7 +1815,7 @@ bool WaitcntGeneratorPreGFX12::createNewWaitcnt(
 
       if (AnyOutOfOrder) {
         // Fall back to non-expanded wait
-        unsigned Enc = AMDGPU::encodeWaitcnt(IV, Wait);
+        unsigned Enc = AMDGPU::encodeWaitcnt(ST, Wait);
         BuildMI(Block, It, DL, TII.get(AMDGPU::S_WAITCNT)).addImm(Enc);
         Modified = true;
       } else {
@@ -1832,14 +1831,14 @@ bool WaitcntGeneratorPreGFX12::createNewWaitcnt(
             AMDGPU::Waitcnt W;
             W.set(CT, Count);
             BuildMI(Block, It, DL, TII.get(AMDGPU::S_WAITCNT))
-                .addImm(AMDGPU::encodeWaitcnt(IV, W));
+                .addImm(AMDGPU::encodeWaitcnt(ST, W));
           });
           Modified = true;
         }
       }
     } else {
       // Normal behavior: emit single combined waitcnt
-      unsigned Enc = AMDGPU::encodeWaitcnt(IV, Wait);
+      unsigned Enc = AMDGPU::encodeWaitcnt(ST, Wait);
       [[maybe_unused]] auto SWaitInst =
           BuildMI(Block, It, DL, TII.get(AMDGPU::S_WAITCNT)).addImm(Enc);
       Modified = true;
@@ -1943,7 +1942,7 @@ bool WaitcntGeneratorGFX12Plus::applyPreexistingWaitcnt(
     if (Opcode == AMDGPU::S_WAIT_LOADCNT_DSCNT) {
       unsigned OldEnc = static_cast<unsigned>(
           TII.getNamedOperand(II, AMDGPU::OpName::simm16)->getImm());
-      AMDGPU::Waitcnt OldWait = AMDGPU::decodeLoadcntDscnt(IV, OldEnc);
+      AMDGPU::Waitcnt OldWait = AMDGPU::decodeLoadcntDscnt(ST, OldEnc);
       if (TrySimplify)
         Wait = Wait.combined(OldWait);
       else
@@ -1958,7 +1957,7 @@ bool WaitcntGeneratorGFX12Plus::applyPreexistingWaitcnt(
     } else if (Opcode == AMDGPU::S_WAIT_STORECNT_DSCNT) {
       unsigned OldEnc = static_cast<unsigned>(
           TII.getNamedOperand(II, AMDGPU::OpName::simm16)->getImm());
-      AMDGPU::Waitcnt OldWait = AMDGPU::decodeStorecntDscnt(IV, OldEnc);
+      AMDGPU::Waitcnt OldWait = AMDGPU::decodeStorecntDscnt(ST, OldEnc);
       if (TrySimplify)
         Wait = Wait.combined(OldWait);
       else
@@ -2055,7 +2054,7 @@ bool WaitcntGeneratorGFX12Plus::applyPreexistingWaitcnt(
     // will have needed to wait for their register sources to be available
     // first.
     if (Wait.get(AMDGPU::LOAD_CNT) != ~0u && Wait.get(AMDGPU::DS_CNT) != ~0u) {
-      unsigned NewEnc = AMDGPU::encodeLoadcntDscnt(IV, Wait);
+      unsigned NewEnc = AMDGPU::encodeLoadcntDscnt(ST, Wait);
       Modified |= updateOperandIfDifferent(*CombinedLoadDsCntInstr,
                                            AMDGPU::OpName::simm16, NewEnc);
       Modified |= promoteSoftWaitCnt(CombinedLoadDsCntInstr);
@@ -2079,7 +2078,7 @@ bool WaitcntGeneratorGFX12Plus::applyPreexistingWaitcnt(
   if (CombinedStoreDsCntInstr) {
     // Similarly for S_WAIT_STORECNT_DSCNT.
     if (Wait.get(AMDGPU::STORE_CNT) != ~0u && Wait.get(AMDGPU::DS_CNT) != ~0u) {
-      unsigned NewEnc = AMDGPU::encodeStorecntDscnt(IV, Wait);
+      unsigned NewEnc = AMDGPU::encodeStorecntDscnt(ST, Wait);
       Modified |= updateOperandIfDifferent(*CombinedStoreDsCntInstr,
                                            AMDGPU::OpName::simm16, NewEnc);
       Modified |= promoteSoftWaitCnt(CombinedStoreDsCntInstr);
@@ -2243,7 +2242,7 @@ bool WaitcntGeneratorGFX12Plus::createNewWaitcnt(
     MachineInstr *SWaitInst = nullptr;
 
     if (Wait.get(AMDGPU::LOAD_CNT) != ~0u) {
-      unsigned Enc = AMDGPU::encodeLoadcntDscnt(IV, Wait);
+      unsigned Enc = AMDGPU::encodeLoadcntDscnt(ST, Wait);
 
       SWaitInst = BuildMI(Block, It, DL, TII.get(AMDGPU::S_WAIT_LOADCNT_DSCNT))
                       .addImm(Enc);
@@ -2251,7 +2250,7 @@ bool WaitcntGeneratorGFX12Plus::createNewWaitcnt(
       Wait.set(AMDGPU::LOAD_CNT, ~0u);
       Wait.set(AMDGPU::DS_CNT, ~0u);
     } else if (Wait.get(AMDGPU::STORE_CNT) != ~0u) {
-      unsigned Enc = AMDGPU::encodeStorecntDscnt(IV, Wait);
+      unsigned Enc = AMDGPU::encodeStorecntDscnt(ST, Wait);
 
       SWaitInst = BuildMI(Block, It, DL, TII.get(AMDGPU::S_WAIT_STORECNT_DSCNT))
                       .addImm(Enc);
@@ -3474,10 +3473,8 @@ SIInsertWaitcntsPass::run(MachineFunction &MF,
 bool SIInsertWaitcnts::run() {
   const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
 
-  AMDGPU::IsaVersion IV = AMDGPU::getIsaVersion(ST.getCPU());
-
   // Initialize hardware limits first, as they're needed by the generators.
-  Limits = AMDGPU::HardwareLimits(IV);
+  Limits = AMDGPU::HardwareLimits(ST);
 
   if (ST.hasExtendedWaitCounts()) {
     IsExpertMode = AMDGPU::isExpertSchedulingMode(ST, MF.getFunction());

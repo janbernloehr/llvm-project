@@ -135,9 +135,8 @@ void AMDGPUPreloadKernArgProlog::createBackCompatBlock(
   addBackCompatLoads(BackCompatMBB, KernArgSegmentPtr, NumKernArgPreloadSGPRs);
 
   // Wait for loads to complete
-  AMDGPU::IsaVersion IV = AMDGPU::getIsaVersion(ST.getCPU());
-  unsigned Waitcnt =
-      AMDGPU::encodeWaitcnt(IV, getVmcntBitMask(IV), getExpcntBitMask(IV), 0);
+  unsigned Waitcnt = AMDGPU::encodeWaitcnt(ST, AMDGPU::getVmcntBitMask(ST),
+                                           AMDGPU::getExpcntBitMask(ST), 0);
   BuildMI(BackCompatMBB, DebugLoc(), TII.get(AMDGPU::S_WAITCNT))
       .addImm(Waitcnt);
 
